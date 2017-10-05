@@ -19,7 +19,7 @@
 
 namespace xgboost {
 /*!
- * \brief Learner class that does training and prediction.
+ * \brief 用于训练和预测的学习器.
  *  This is the user facing module of xgboost training.
  *  The Load/Save function corresponds to the model used in python/R.
  *  \code
@@ -69,8 +69,7 @@ class Learner : public rabit::Serializable {
    */
   virtual void Save(dmlc::Stream* fo) const = 0;
   /*!
-   * \brief update the model for one iteration
-   *  With the specified objective function.
+   * \brief 使用指定的目标函数更新一次迭代的模型。
    * \param iter current iteration number
    * \param train reference to the data matrix.
    */
@@ -86,7 +85,7 @@ class Learner : public rabit::Serializable {
                             DMatrix* train,
                             std::vector<bst_gpair>* in_gpair) = 0;
   /*!
-   * \brief evaluate the model for specific iteration using the configured metrics.
+   * \brief 使用配置的metrics来评估特定迭代的模型
    * \param iter iteration number
    * \param data_sets datasets to be evaluated.
    * \param data_names name of each dataset
@@ -112,7 +111,7 @@ class Learner : public rabit::Serializable {
                        bool pred_leaf = false,
                        bool pred_contribs = false) const = 0;
   /*!
-   * \brief Set additional attribute to the Booster.
+   * \brief 为Booster设置附加属性。
    *  The property will be saved along the booster.
    * \param key The key of the property.
    * \param value The value of the property.

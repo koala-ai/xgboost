@@ -83,7 +83,7 @@ struct GBLinearTrainParam : public dmlc::Parameter<GBLinearTrainParam> {
 };
 
 /*!
- * \brief gradient boosted linear model
+ * \brief 梯度提升线性模型
  */
 class GBLinear : public GradientBooster {
  public:

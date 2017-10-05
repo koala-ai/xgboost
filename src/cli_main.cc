@@ -36,7 +36,7 @@ struct CLIParam : public dmlc::Parameter<CLIParam> {
   int task;
   /*! \brief whether silent */
   int silent;
-  /*! \brief whether evaluate training statistics */
+  /*! \brief 是否评估训练统计量 */
   bool eval_train;
   /*! \brief number of boosting iterations */
   int num_round;
@@ -66,11 +66,11 @@ struct CLIParam : public dmlc::Parameter<CLIParam> {
   std::string dump_format;
   /*! \brief name of feature map */
   std::string name_fmap;
-  /*! \brief name of dump file */
+  /*! \brief 转储文件的名称 */
   std::string name_dump;
-  /*! \brief the paths of validation data sets */
+  /*! \brief 验证数据集的名称 */
   std::vector<std::string> eval_data_paths;
-  /*! \brief the names of the evaluation data used in output log */
+  /*! \brief 评估数据在输出日志中使用的名称 */
   std::vector<std::string> eval_data_names;
   /*! \brief 所有的配置 */
   std::vector<std::pair<std::string, std::string> > cfg;

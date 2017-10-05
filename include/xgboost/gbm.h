@@ -61,7 +61,7 @@ class GradientBooster {
     return false;
   }
   /*!
-   * \brief perform update to the model(boosting)
+   * \brief 对模型执行更新（提升）
    * \param p_fmat feature matrix that provide access to features
    * \param in_gpair address of the gradient pair statistics of the data
    * \param obj The objective function, optional, can be nullptr when use customized version

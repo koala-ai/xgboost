@@ -1,0 +1,16 @@
+{
+    "files.associations": {
+        "array": "cpp",
+        "string_view": "cpp",
+        "*.cuh": "cpp",
+        "functional": "cpp",
+        "type_traits": "cpp",
+        "utility": "cpp",
+        "optional": "cpp",
+        "system_error": "cpp",
+        "hashtable": "cpp",
+        "bitset": "cpp",
+        "chrono": "cpp",
+        "*.tcc": "cpp"
+    }
+}

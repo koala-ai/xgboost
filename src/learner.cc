@@ -74,7 +74,7 @@ struct LearnerTrainParam : public dmlc::Parameter<LearnerTrainParam> {
   // data split mode, can be row, col, or none.
   int dsplit;
   // tree construction method
-  int tree_method;
+  int tree_method;  // tree_method ['auto', 'exact', 'approx', 'hist', 'gpu_exact', 'gpu_hist']
   // internal test flag
   std::string test_flag;
   // maximum buffered row value
@@ -133,8 +133,7 @@ DMLC_REGISTER_PARAMETER(LearnerModelParam);
 DMLC_REGISTER_PARAMETER(LearnerTrainParam);
 
 /*!
- * \brief learner that performs gradient boosting for a specific objective
- * function. It does training and prediction.
+ * \brief 为特定目标函数执行梯度提升的学习器。它用于训练和预测。
  */
 class LearnerImpl : public Learner {
  public:
@@ -145,9 +144,9 @@ class LearnerImpl : public Learner {
     name_gbm_ = "gbtree";
   }
 
-  void ConfigureUpdaters() {
+  void ConfigureUpdaters() {  
     if (tparam.tree_method == 0 || tparam.tree_method == 1 ||
-        tparam.tree_method == 2) {
+        tparam.tree_method == 2) { // 如果tree_method为'auto', 'exact', 'approx'
       if (cfg_.count("updater") == 0) {
         if (tparam.dsplit == 1) {
           cfg_["updater"] = "distcol";
@@ -158,20 +157,20 @@ class LearnerImpl : public Learner {
           cfg_["updater"] = "grow_histmaker,refresh,prune";
         }
       }
-    } else if (tparam.tree_method == 3) {
+    } else if (tparam.tree_method == 3) { // 如果tree_method为'hist'
       /* histogram-based algorithm */
       LOG(CONSOLE) << "Tree method is selected to be \'hist\', which uses a "
                       "single updater "
                    << "grow_fast_histmaker.";
       cfg_["updater"] = "grow_fast_histmaker";
-    } else if (tparam.tree_method == 4) {
+    } else if (tparam.tree_method == 4) { // 如果tree_method为'gpu-exact'
       if (cfg_.count("updater") == 0) {
         cfg_["updater"] = "grow_gpu,prune";
       }
       if (cfg_.count("predictor") == 0) {
         cfg_["predictor"] = "gpu_predictor";
       }
-    } else if (tparam.tree_method == 5) {
+    } else if (tparam.tree_method == 5) { // 如果tree_method为'gpu-hist'
       if (cfg_.count("updater") == 0) {
         cfg_["updater"] = "grow_gpu_hist";
       }
@@ -210,10 +209,11 @@ class LearnerImpl : public Learner {
       tparam.dsplit = 2;
     }
 
-    if (cfg_.count("num_class") != 0) {
+    // 若类别数大于1并且没有指定目标函数，目标函数为softmax多分类
+    if (cfg_.count("num_class") != 0) { 
       cfg_["num_output_group"] = cfg_["num_class"];
       if (atoi(cfg_["num_class"].c_str()) > 1 && cfg_.count("objective") == 0) {
-        cfg_["objective"] = "multi:softmax";
+        cfg_["objective"] = "multi:softmax"; 
       }
     }
 
@@ -224,7 +224,8 @@ class LearnerImpl : public Learner {
 
     ConfigureUpdaters();
 
-    if (cfg_.count("objective") == 0) {
+    // 默认为线性回归
+    if (cfg_.count("objective") == 0) { 
       cfg_["objective"] = "reg:linear";
     }
     if (cfg_.count("booster") == 0) {
@@ -341,16 +342,17 @@ class LearnerImpl : public Learner {
     }
   }
 
+  // 迭代一次来更新参数
   void UpdateOneIter(int iter, DMatrix* train) override {
     CHECK(ModelInitialized())
         << "Always call InitModel or LoadModel before update";
     if (tparam.seed_per_iteration || rabit::IsDistributed()) {
       common::GlobalRandom().seed(tparam.seed * kRandSeedMagic + iter);
     }
-    this->LazyInitDMatrix(train);
-    this->PredictRaw(train, &preds_);
-    obj_->GetGradient(preds_, train->info(), iter, &gpair_);
-    gbm_->DoBoost(train, &gpair_, obj_.get());
+    this->LazyInitDMatrix(train); // 初始化DMatrix
+    this->PredictRaw(train, &preds_); // 获取一个un-transformed预测
+    obj_->GetGradient(preds_, train->info(), iter, &gpair_); // 根据目标函数计算梯度
+    gbm_->DoBoost(train, &gpair_, obj_.get()); // 对模型执行更新（提升）
   }
 
   void BoostOneIter(int iter, DMatrix* train,
@@ -362,17 +364,20 @@ class LearnerImpl : public Learner {
     gbm_->DoBoost(train, in_gpair);
   }
 
+  // 使用配置的metrics来评估特定迭代的模型
   std::string EvalOneIter(int iter, const std::vector<DMatrix*>& data_sets,
                           const std::vector<std::string>& data_names) override {
     double tstart = dmlc::GetTime();
     std::ostringstream os;
     os << '[' << iter << ']' << std::setiosflags(std::ios::fixed);
     if (metrics_.size() == 0) {
+      // emplace_back和push_back都是向容器内添加数据. 在容器中添加类的对象时,
+      // 相比于push_back, emplace_back可以避免额外类的复制和移动操作.
       metrics_.emplace_back(Metric::Create(obj_->DefaultEvalMetric()));
     }
     for (size_t i = 0; i < data_sets.size(); ++i) {
       this->PredictRaw(data_sets[i], &preds_);
-      obj_->EvalTransform(&preds_);
+      obj_->EvalTransform(&preds_); // 变换预测值
       for (auto& ev : metrics_) {
         os << '\t' << data_names[i] << '-' << ev->Name() << ':'
            << ev->Eval(preds_, data_sets[i]->info(), tparam.dsplit == 2);
@@ -489,9 +494,9 @@ class LearnerImpl : public Learner {
     }
   }
 
-  // return whether model is already initialized.
+  // 是否模型已经初始化
   inline bool ModelInitialized() const { return gbm_.get() != nullptr; }
-  // lazily initialize the model if it haven't yet been initialized.
+  // 如果尚未初始化模型，则将其初始化
   inline void LazyInitModel() {
     if (this->ModelInitialized()) return;
     // estimate feature bound
@@ -517,7 +522,7 @@ class LearnerImpl : public Learner {
     gbm_->Configure(cfg_.begin(), cfg_.end());
   }
   /*!
-   * \brief get un-transformed prediction
+   * \brief 获取一个un-transformed预测
    * \param data training data matrix
    * \param out_preds output vector that stores the prediction
    * \param ntree_limit limit number of trees used for boosted tree

@@ -49,7 +49,7 @@ class ObjFunction {
   virtual const char* DefaultEvalMetric() const = 0;
   // the following functions are optional, most of time default implementation is good enough
   /*!
-   * \brief transform prediction values, this is only called when Prediction is called
+   * \brief 变换预测值，这仅在调用预测时才调用
    * \param io_preds prediction values, saves to this vector as well
    */
   virtual void PredTransform(std::vector<bst_float> *io_preds) {}
