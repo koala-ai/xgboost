@@ -220,7 +220,7 @@ struct RowSet {
 };
 
 /*!
- * \brief Internal data structured used by XGBoost during training.
+ * \brief 在训练过程中XGBoost使用的内部数据结构.
  *  There are two ways to create a customized DMatrix that reads in user defined-format.
  *
  *  - Provide a dmlc::Parser and pass into the DMatrix::Create
@@ -251,11 +251,10 @@ class DMatrix {
    */
   virtual dmlc::DataIter<ColBatch>* ColIterator(const std::vector<bst_uint>& fset) = 0;
   /*!
-   * \brief check if column access is supported, if not, initialize column access.
-   * \param enabled whether certain feature should be included in column access.
-   * \param subsample subsample ratio when generating column access.
-   * \param max_row_perbatch auxiliary information, maximum row used in each column batch.
-   *         this is a hint information that can be ignored by the implementation.
+   * \brief 检查是否支持列访问，如果不支持，则初始化列访问。
+   * \param enabled 某些特征是否应包含在列访问中.
+   * \param subsample 生成列访问时的子采样比率.
+   * \param max_row_perbatch 辅助信息，每列批次中使用的最大行。这是一个提示信息，可以在实现时忽略.
    * \return Number of column blocks in the column access.
    */
   virtual void InitColAccess(const std::vector<bool>& enabled,
