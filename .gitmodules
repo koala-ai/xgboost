@@ -1,0 +1,12 @@
+[submodule "cub"]
+	path = cub
+	url = https://github.com/koala-ai/cub.git
+[submodule "dmlc-core"]
+	path = dmlc-core
+	url = https://github.com/koala-ai/dmlc-core.git
+[submodule "rabit"]
+	path = rabit
+	url = https://github.com/koala-ai/rabit.git
+[submodule "nccl"]
+	path = nccl
+	url = https://github.com/koala-ai/nccl.git
