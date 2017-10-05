@@ -72,10 +72,10 @@ struct CLIParam : public dmlc::Parameter<CLIParam> {
   std::vector<std::string> eval_data_paths;
   /*! \brief the names of the evaluation data used in output log */
   std::vector<std::string> eval_data_names;
-  /*! \brief all the configurations */
+  /*! \brief 所有的配置 */
   std::vector<std::pair<std::string, std::string> > cfg;
 
-  // declare parameters
+  //  定义参数
   DMLC_DECLARE_PARAMETER(CLIParam) {
     // NOTE: declare everything except eval_data_paths.
     DMLC_DECLARE_FIELD(task).set_default(kTrain)
@@ -125,7 +125,7 @@ struct CLIParam : public dmlc::Parameter<CLIParam> {
     DMLC_DECLARE_ALIAS(test_path, test:data);
     DMLC_DECLARE_ALIAS(name_fmap, fmap);
   }
-  // customized configure function of CLIParam
+  // 自定义参数函数
   inline void Configure(const std::vector<std::pair<std::string, std::string> >& cfg) {
     this->cfg = cfg;
     this->InitAllowUnknown(cfg);
@@ -157,10 +157,10 @@ DMLC_REGISTER_PARAMETER(CLIParam);
 void CLITrain(const CLIParam& param) {
   const double tstart_data_load = dmlc::GetTime();
   if (rabit::IsDistributed()) {
-    std::string pname = rabit::GetProcessorName();
-    LOG(CONSOLE) << "start " << pname << ":" << rabit::GetRank();
+    std::string pname = rabit::GetProcessorName(); // 获得进程的名字
+    LOG(CONSOLE) << "start " << pname << ":" << rabit::GetRank(); // 获得当前进程的排名
   }
-  // load in data.
+  // 加载数据.
   std::shared_ptr<DMatrix> dtrain(
       DMatrix::Load(param.train_path, param.silent != 0, param.dsplit == 2));
   std::vector<std::shared_ptr<DMatrix> > deval;
