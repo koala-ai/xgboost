@@ -161,8 +161,7 @@ void CLITrain(const CLIParam& param) {
     LOG(CONSOLE) << "start " << pname << ":" << rabit::GetRank(); // 获得当前进程的排名
   }
   // 加载数据.
-  std::shared_ptr<DMatrix> dtrain(
-      DMatrix::Load(param.train_path, param.silent != 0, param.dsplit == 2));
+  std::shared_ptr<DMatrix> dtrain(DMatrix::Load(param.train_path, param.silent != 0, param.dsplit == 2));
   std::vector<std::shared_ptr<DMatrix> > deval;
   std::vector<std::shared_ptr<DMatrix> > cache_mats;
   std::vector<DMatrix*> eval_datasets;
@@ -179,11 +178,11 @@ void CLITrain(const CLIParam& param) {
     eval_datasets.push_back(dtrain.get());
     eval_data_names.push_back(std::string("train"));
   }
-  // initialize the learner.
+  // 初始化学习器.
   std::unique_ptr<Learner> learner(Learner::Create(cache_mats));
-  int version = rabit::LoadCheckPoint(learner.get());
+  int version = rabit::LoadCheckPoint(learner.get()); // load latest check point
   if (version == 0) {
-    // initialize the model if needed.
+    // 初始化需要的模型.
     if (param.model_in != "NULL") {
       std::unique_ptr<dmlc::Stream> fi(
           dmlc::Stream::Create(param.model_in.c_str(), "r"));
@@ -197,7 +196,7 @@ void CLITrain(const CLIParam& param) {
   if (param.silent == 0) {
     LOG(INFO) << "Loading data: " << dmlc::GetTime() - tstart_data_load << " sec";
   }
-  // start training.
+  // 开始训练
   const double start = dmlc::GetTime();
   for (int i = version / 2; i < param.num_round; ++i) {
     double elapsed = dmlc::GetTime() - start;
@@ -205,7 +204,7 @@ void CLITrain(const CLIParam& param) {
       if (param.silent == 0) {
         LOG(CONSOLE) << "boosting round " << i << ", " << elapsed << " sec elapsed";
       }
-      learner->UpdateOneIter(i, dtrain.get());
+      learner->UpdateOneIter(i, dtrain.get()); // 一次迭代
       if (learner->AllowLazyCheckPoint()) {
         rabit::LazyCheckPoint(learner.get());
       } else {
@@ -214,7 +213,7 @@ void CLITrain(const CLIParam& param) {
       version += 1;
     }
     CHECK_EQ(version, rabit::VersionNumber());
-    std::string res = learner->EvalOneIter(i, eval_datasets, eval_data_names);
+    std::string res = learner->EvalOneIter(i, eval_datasets, eval_data_names); // 评价指标
     if (rabit::IsDistributed()) {
       if (rabit::GetRank() == 0) {
         LOG(TRACKER) << res;
@@ -233,7 +232,7 @@ void CLITrain(const CLIParam& param) {
          << i + 1 << ".model";
       std::unique_ptr<dmlc::Stream> fo(
           dmlc::Stream::Create(os.str().c_str(), "w"));
-      learner->Save(fo.get());
+      learner->Save(fo.get());  
     }
 
     if (learner->AllowLazyCheckPoint()) {
@@ -244,7 +243,7 @@ void CLITrain(const CLIParam& param) {
     version += 1;
     CHECK_EQ(version, rabit::VersionNumber());
   }
-  // always save final round
+  // 保存最后一轮迭代的模型
   if ((param.save_period == 0 || param.num_round % param.save_period != 0) &&
       param.model_out != "NONE" &&
       rabit::GetRank() == 0) {
@@ -275,7 +274,7 @@ void CLIDumpModel(const CLIParam& param) {
     dmlc::istream is(fs.get());
     fmap.LoadText(is);
   }
-  // load model
+  // 加载模型
   CHECK_NE(param.model_in, "NULL")
       << "Must specify model_in for dump";
   std::unique_ptr<Learner> learner(Learner::Create({}));
@@ -309,10 +308,10 @@ void CLIDumpModel(const CLIParam& param) {
 void CLIPredict(const CLIParam& param) {
   CHECK_NE(param.test_path, "NULL")
       << "Test dataset parameter test:data must be specified.";
-  // load data
+  // 加载测试数据
   std::unique_ptr<DMatrix> dtest(
       DMatrix::Load(param.test_path, param.silent != 0, param.dsplit == 2));
-  // load model
+  // 加载模型
   CHECK_NE(param.model_in, "NULL")
       << "Must specify model_in for predict";
   std::unique_ptr<Learner> learner(Learner::Create({}));
@@ -325,7 +324,7 @@ void CLIPredict(const CLIParam& param) {
     LOG(CONSOLE) << "start prediction...";
   }
   std::vector<bst_float> preds;
-  learner->Predict(dtest.get(), param.pred_margin, &preds, param.ntree_limit);
+  learner->Predict(dtest.get(), param.pred_margin, &preds, param.ntree_limit); //预测
   if (param.silent == 0) {
     LOG(CONSOLE) << "writing prediction to " << param.name_pred;
   }
