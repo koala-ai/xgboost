@@ -39,14 +39,22 @@ class SketchMaker: public BaseMaker {
   inline void Update(const std::vector<bst_gpair> &gpair,
                      DMatrix *p_fmat,
                      RegTree *p_tree) {
+    //初始化数据和节点的映射关系，根据配置进行样本的降采样(伯努利采样)
+    //qexpand_用于存储每次探索出候选树节点，初始化为root节点。
     this->InitData(gpair, *p_fmat, *p_tree);
     for (int depth = 0; depth < param.max_depth; ++depth) {
+      //对_qexpand中节点计算其对应统计量的和
       this->GetNodeStats(gpair, *p_fmat, *p_tree,
                          &thread_stats, &node_stats);
+      //初始化WXQuantileSketch，用于分位图策略
       this->BuildSketch(gpair, p_fmat, *p_tree);
+      //同步所有节点的信息SKStats
       this->SyncNodeStats();
+      //查找最佳分裂点
       this->FindSplit(depth, gpair, p_fmat, p_tree);
+      //对新加入的节点重新分配样本映射关系
       this->ResetPositionCol(qexpand, p_fmat, *p_tree);
+      //更新待探索的候选节点列表_qexpand
       this->UpdateQueueExpand(*p_tree);
       // if nothing left to be expand, break
       if (qexpand.size() == 0) break;

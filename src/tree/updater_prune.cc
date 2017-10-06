@@ -36,6 +36,7 @@ class TreePruner: public TreeUpdater {
     float lr = param.learning_rate;
     param.learning_rate = lr / trees.size();
     for (size_t i = 0; i < trees.size(); ++i) {
+      //对每一棵树进行剪枝
       this->DoPrune(*trees[i]);
     }
     param.learning_rate = lr;
@@ -66,6 +67,8 @@ class TreePruner: public TreeUpdater {
       tree.stat(nid).leaf_child_cnt = 0;
     }
     for (int nid = 0; nid < tree.param.num_nodes; ++nid) {
+      // 对当前节点进行剪枝
+      // 如果loss_chg<threlshold，剪枝。并递归判断新节点是否需要剪枝。
       if (tree[nid].is_leaf()) {
         npruned = this->TryPruneLeaf(tree, nid, tree.GetDepth(nid), npruned);
       }

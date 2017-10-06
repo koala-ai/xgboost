@@ -86,14 +86,22 @@ class ColMaker: public TreeUpdater {
     virtual void Update(const std::vector<bst_gpair>& gpair,
                         DMatrix* p_fmat,
                         RegTree* p_tree) {
+      // 初始化数据和节点的映射关系，根据配置进行样本的降采样(伯努利采样)
+      // qexpand_用于存储每次探索出候选树节点，初始化为root节点。
       this->InitData(gpair, *p_fmat, *p_tree);
+      // 计算qexpand_队列中所有候选节点的损失函数和权重
       this->InitNewNode(qexpand_, gpair, *p_fmat, *p_tree);
+      // 根据树的最大深度进行生长
       for (int depth = 0; depth < param.max_depth; ++depth) {
+        //查找最佳分裂点
         this->FindSplit(depth, qexpand_, gpair, p_fmat, p_tree);
+        //根据分裂结果，将数据重新映射到子节点
         this->ResetPosition(qexpand_, p_fmat, *p_tree);
+        //将待扩展分割的叶子结点用于替换qexpand_，作为下一轮split的候选节点
         this->UpdateQueueExpand(*p_tree, &qexpand_);
+        //重新初始化，计算qexpand_队列中所有候选节点的损失函数和权重
         this->InitNewNode(qexpand_, gpair, *p_fmat, *p_tree);
-        // if nothing left to be expand, break
+        //若无需继续分裂，则停止
         if (qexpand_.size() == 0) break;
       }
       // set all the rest expanding nodes to leaf
@@ -603,6 +611,8 @@ class ColMaker: public TreeUpdater {
           const ColBatch::Inst c = batch[i];
           const bool ind = c.length != 0 && c.data[0].fvalue == c.data[c.length - 1].fvalue;
           if (param.need_forward_search(fmat.GetColDensity(fid), ind)) {
+            // 特征间并行方式
+            // 每个线程处理一维特征，遍历数据累计统计量(grad/hess)得到最佳分裂点split_point
             this->EnumerateSplit(c.data, c.data + c.length, +1,
                                  fid, gpair, info, stemp[tid]);
           }
@@ -613,6 +623,10 @@ class ColMaker: public TreeUpdater {
         }
       } else {
         for (bst_omp_uint i = 0; i < nsize; ++i) {
+          // 特征内并行方式
+          // 在每个线程里汇总各个线程内分配到的数据样本的统计量(grad/hess);
+          // 每个线程输出对应样本整体的统计量，得到一个线程级别统计量数组
+          // 在这个组内进行枚举选出最佳分裂点，进一步定位到对应线程的最优分割点
           this->ParallelFindSplit(batch[i], batch.col_index[i],
                                   fmat, gpair);
         }
@@ -635,6 +649,7 @@ class ColMaker: public TreeUpdater {
       }
       dmlc::DataIter<ColBatch>* iter = p_fmat->ColIterator(feat_set);
       while (iter->Next()) {
+        // 找到分裂点,有两种并行方式
         this->UpdateSolution(iter->Value(), gpair, *p_fmat);
       }
       // after this each thread's stemp will get the best candidates, aggregate results

@@ -125,7 +125,10 @@ class HistMaker: public BaseMaker {
   virtual void Update(const std::vector<bst_gpair> &gpair,
                       DMatrix *p_fmat,
                       RegTree *p_tree) {
+    //初始化样本和树节点的映射关系，根据配置进行样本的降采样(伯努利采样)
+    //队列qexpand_用于存储每次探索出候选树节点，初始化为root节点。
     this->InitData(gpair, *p_fmat, *p_tree);
+    //初始化fwork_set，大小为每颗树的节点，表示用于建树的特征。
     this->InitWorkSet(p_fmat, *p_tree, &fwork_set);
     // mark root node as fresh.
     for (int i = 0; i < p_tree->param.num_roots; ++i) {
@@ -133,14 +136,15 @@ class HistMaker: public BaseMaker {
     }
 
     for (int depth = 0; depth < param.max_depth; ++depth) {
-      // reset and propose candidate split
+      // 重置并设置候选分裂特征
       this->ResetPosAndPropose(gpair, p_fmat, fwork_set, *p_tree);
-      // create histogram
+      // 生成近似直方图
       this->CreateHist(gpair, p_fmat, fwork_set, *p_tree);
-      // find split based on histogram statistics
+      // 通过直方图统计量找到合适的分裂节点
       this->FindSplit(depth, gpair, p_fmat, fwork_set, p_tree);
-      // reset position after split
+      // 对新加入的节点重新分配样本映射关系
       this->ResetPositionAfterSplit(p_fmat, *p_tree);
+      // 更新待探索的候选节点列表qexpand_
       this->UpdateQueueExpand(*p_tree);
       // if nothing left to be expand, break
       if (qexpand.size() == 0) break;
@@ -355,13 +359,14 @@ class CQHistMaker: public HistMaker<TStats> {
         for (bst_omp_uint i = 0; i < nsize; ++i) {
           int offset = feat2workindex[batch.col_index[i]];
           if (offset >= 0) {
+            // 多线程更新特征直方图
             this->UpdateHistCol(gpair, batch[i], info, tree,
                                 fset, offset,
                                 &thread_hist[omp_get_thread_num()]);
           }
         }
       }
-      // update node statistics.
+      // 对_qexpand中节点计算其对应统计量的和
       this->GetNodeStats(gpair, *p_fmat, tree,
                          &thread_stats, &node_stats);
       for (size_t i = 0; i < this->qexpand.size(); ++i) {
@@ -374,6 +379,8 @@ class CQHistMaker: public HistMaker<TStats> {
     // sync the histogram
     // if it is C++11, use lazy evaluation for Allreduce
 #if __cplusplus >= 201103L
+    //rabit::allreduce。借助mpi的allreduce进行理解，思考2
+    //从各个计算结点汇总统计量
     this->histred.Allreduce(dmlc::BeginPtr(this->wspace.hset[0].data),
                             this->wspace.hset[0].data.size(), lazy_get_hist);
 #else
