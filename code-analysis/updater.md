@@ -1,77 +1,14 @@
-# 主流程
+# updater
 
-```
-cli_main.cc:
-main()
-     -> CLIRunTask()
-          -> CLITrain()
-               -> DMatrix::Load()
-               -> learner = Learner::Create()
-               -> learner->Configure()
-               -> learner->InitModel()
-               -> for (i = 0; i < param.num_round; ++i)
-                    -> learner->UpdateOneIter()
-                    -> learner->Save()    
-learner.cc:
-Create()
-      -> new LearnerImpl() //派生自learner
-Configure() // 配置obj, updater和模型的相关参数
-InitModel()
-     -> LazyInitModel()
-          -> obj_ = ObjFunction::Create()
-               -> objective.cc
-                    Create()
-                         -> SoftmaxMultiClassObj(multiclass_obj.cc)/
-                            LambdaRankObj(rank_obj.cc)/
-                            RegLossObj(regression_obj.cc)/
-                            PoissonRegression(regression_obj.cc)
-          -> gbm_ = GradientBooster::Create()
-               -> gbm.cc
-                    Create()
-                         -> GBTree(gbtree.cc)/
-                            GBLinear(gblinear.cc)
-          -> obj_->Configure()
-          -> gbm_->Configure()
-UpdateOneIter()
-      -> PredictRaw() // 预测样本标签
-      -> obj_->GetGradient() // 计算样本的一阶导，二阶导
-      -> gbm_->DoBoost()  // 进行boost(tree model/linear model)        
+在XGBoost里为了性能优化，既提供了单机多线程并行加速，也支持多机分布式加速。也就提供了若干种不同的并行建树的updater实现，按并行策略的不同，包括：
 
-gbtree.cc:
-Configure() // 根据配置初始化树相关操作
-      -> for (up in updaters)
-           -> up->Init()
-DoBoost() // 每一级生成一颗RegTree
-      -> BoostNewTrees()
-           -> new_tree = new RegTree()
-           -> for (up in updaters)
-                -> up->Update(new_tree)    
+(1). inter-feature exact parallelism （特征级精确并行）
 
-tree_updater.cc:
-Create()
-     -> ColMaker/DistColMaker(updater_colmaker.cc)/
-        SketchMaker(updater_skmaker.cc)/
-        TreeRefresher(updater_refresh.cc)/
-        TreePruner(updater_prune.cc)/
-        HistMaker/CQHistMaker/
-                  GlobalProposalHistMaker/
-                  QuantileHistMaker(updater_histmaker.cc)/
-        TreeSyncher(updater_sync.cc)
-```
+(2). inter-feature approximate parallelism（特征级近似并行，基于特征分bin计算，减少了枚举所有特征分裂点的开销）
 
-从上面的代码主流程可以看到，在XGBoost的实现中，对算法进行了模块化的拆解，几个重要的部分分别是：
+(3). intra-feature parallelism （特征内并行）
 
-- ObjFunction：对应于不同的Loss Function，可以完成一阶和二阶导数的计算。
-- GradientBooster：用于管理Boost方法生成的Model，注意，这里的Booster Model既可以对应于线性Booster Model，也可以对应于Tree Booster Model。
-- Updater：用于建树，根据具体的建树策略不同，也会有多种Updater。比如，在XGBoost里为了性能优化，既提供了单机多线程并行加速，也支持多机分布式加速。也就提供了若干种不同的并行建树的updater实现，按并行策略的不同，包括：
-
-      (1). inter-feature exact parallelism （特征级精确并行）
-
-      (2). inter-feature approximate parallelism（特征级近似并行，基于特征分bin计算，减少了枚举所有特征分裂点的开销）
-
-      (3). intra-feature parallelism （特征内并行）
-
-      (4). inter-node parallelism  （多机并行）
+(4). inter-node parallelism  （多机并行）
 
 此外，为了避免overfit，还提供了一个用于对树进行剪枝的updater(TreePruner)，以及一个用于在分布式场景下完成结点模型参数信息通信的updater(TreeSyncher)，这样设计，关于建树的主要操作都可以通过Updater链的方式串接起来，是Decorator设计模式的一种应用。
 
