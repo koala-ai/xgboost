@@ -1,6 +1,6 @@
 # Updater
 
-在XGBoost里为了性能优化，既提供了单机多线程并行加速，也支持多机分布式加速。也就提供了若干种不同的并行建树的updater实现(均在tree目录下)，按并行策略的不同，包括：
+&emsp;&emsp;在XGBoost里为了性能优化，既提供了单机多线程并行加速，也支持多机分布式加速。也就提供了若干种不同的并行建树的updater实现(均在tree目录下)，按并行策略的不同，包括：
 
 (1). inter-feature exact parallelism （特征级精确并行）
 
@@ -10,9 +10,9 @@
 
 (4). inter-node parallelism  （多机并行）
 
-此外，为了避免过拟合，还提供了一个用于对树进行剪枝的updater(TreePruner)，以及一个用于在分布式场景下完成结点模型参数信息通信的updater(TreeSyncher)，这样设计，关于建树的主要操作都可以通过Updater链的方式串接起来，是Decorator设计模式的一种应用。
+&emsp;&emsp;此外，为了避免过拟合，还提供了一个用于对树进行剪枝的updater(TreePruner)，以及一个用于在分布式场景下完成结点模型参数信息通信的updater(TreeSyncher)，这样设计，关于建树的主要操作都可以通过Updater链的方式串接起来，是Decorator设计模式的一种应用。
 
-XGBoost的实现中，最重要的就是建树环节，而建树对应的代码中，最主要的也是Updater的实现。
+&emsp;&emsp;XGBoost的实现中，最重要的就是建树环节，而建树对应的代码中，最主要的也是Updater的实现。
 
 ## ColMaker（单机版的inter-feature exact parallelism）
 
@@ -28,8 +28,9 @@ ColMaker::Update()
           ->  for (depth = 0; depth < 树的最大深度; ++depth)
                -> FindSplit()
                     -> for (each feature) // 通过OpenMP获取inter-feature parallelism
-                         -> UpdateSolution()      
-                              -> EnumerateSplit()  // 每个执行线程处理一个特征，选出每个特征的最优split point
+                         -> UpdateSolution()  
+                              // 每个执行线程处理一个特征，选出每个特征的最优split point    
+                              -> EnumerateSplit()  
                               // 多个执行线程同时处理一个特征，选出该特征的最优split point; 
                               // 在每个线程里汇总各个线程内分配到的数据样本的统计量(grad/hess);
                               // aggregate所有线程的样本统计(grad/hess)， 计算出每个线程分配到的样本集合的边界特征值作为split point的最优分割点;
@@ -43,40 +44,41 @@ ColMaker::Update()
                -> ResetPosition() 
                 // 根据上一步的分割动作，更新样本到树结点的映射关系
                 // Missing Value(i.e. default)和非Missing Value(i.e.non-default)分别处理
-               -> UpdateQueueExpand() 
                 // 将待扩展分割的叶子结点用于替换qexpand_，作为下一轮split的起始基础
-               -> InitNewNode()  // 为可用于split的树结点计算统计量
+               -> UpdateQueueExpand() 
+                // 为可用于split的树结点计算统计量
+               -> InitNewNode()  
 ```
 
-ColMaker的整个建树操作中，最关键的地方是用于支持intra-feature parallelism的ParallelFindSplit()的实现。
+&emsp;&emsp;ColMaker的整个建树操作中，最关键的地方是用于支持intra-feature parallelism的ParallelFindSplit()的实现。
 
-以上是对XGBoost单机多线程的精确建树算法的介绍，在官方论文里，对于这个算法有一个更好的描述:    
+&emsp;&emsp;以上是对XGBoost单机多线程的精确建树算法的介绍，在官方论文里，对于这个算法有更好的描述，如下:    
 
 ![exact-greedy-algorithm](../images/exact-greedy-algorithm.png)
 
-单机版本的实现中，另一个重要的细节是对于稀疏离散特征的支持，在这方面，XGBoost的实现做了比较细致的工程优化考量：
+&emsp;&emsp;单机版本的实现中，另一个重要的细节是对于稀疏离散特征的支持，在这方面，XGBoost的实现做了比较细致的工程优化考量：
 
 ![sparsity-aware-split-finding](../images/sparsity-aware-split-finding.png)
 
-在XGBoost里，对于稀疏性的离散特征，在寻找split point的时候，不会对该特征为missing的样本进行遍历统计，只对该列特征值为non-missing的样本上对应的特征值进行遍历，通过这个工程的方法来减少了为稀疏离散特征寻找split point的时间开销。在逻辑实现上，为了保证完备性，会分别处理将missing该特征值的样本分配到左叶子结点和右叶子结点的两种情形。
+&emsp;&emsp;在XGBoost里，对于稀疏性的离散特征，在寻找split point的时候，不会对该特征值为missing的样本进行遍历统计，只会对该列特征值为non-missing的样本上对应的特征值进行遍历，可以通过这个工程的方法来减少为稀疏离散特征寻找split point的时间开销。在逻辑实现上，为了保证完备性，会分别处理将missing该特征值的样本分配到左叶子结点和右叶子结点的两种情形。
 
-在XGBoost里，单机多线程，并没有通过显式的pthread这样的方式来实现，而是通过OpenMP来完成多线程的处理。
+&emsp;&emsp;在XGBoost里，单机多线程，并没有通过显式的pthread这样的方式来实现，而是通过OpenMP来完成多线程的处理。
 
-单机实现中，另一个重要的updater是TreePruner，这是一个为了减少overfit，在loss函数的正则项之外提供的额外正则化手段，实现逻辑也比较直观，对于已经构造好的Tree结构，判断每个叶子结点，如果这个叶子结点的父结点分裂所带来的loss变化小于配置文件中规定的阈值，就会把这个叶子结点和它的兄弟结点合并回父结点里，并且这个pruning操作会递归下去。
+&emsp;&emsp;单机实现中，另一个重要的updater是TreePruner，这是一个为了减少overfit，在loss函数的正则项之外提供的额外正则化手段，实现逻辑也比较直观，对于已经构造好的Tree结构，判断每个叶子结点，如果这个叶子结点的父结点分裂所带来的loss变化小于配置文件中规定的阈值，就会把这个叶子结点和它的兄弟结点合并回父结点里，并且这个pruning操作会递归下去。
 
-上面介绍的是精确的建模算法，在XGBoost中，出于性能优化的考虑，也提供了近似的建模算法支持，核心思想是在寻找split point的时候，不会枚举所有的特征值，而会对特征值进行聚合统计，然后形成若干个bucket，只将bucket边界上的特征值作为split point的候选，从而获得性能提升。
+&emsp;&emsp;上面介绍的是精确的建模算法，在XGBoost中，出于性能优化的考虑，也提供了近似的建模算法支持，核心思想是在寻找split point的时候，不会枚举所有的特征值，而会对特征值进行聚合统计，然后形成若干个bucket，只将bucket边界上的特征值作为split point的候选，从而获得性能提升。
 
 ![approximate-algorithm-split-finding](../images/approximate-algorithm-split-finding.png)
 
 ## 分布式实现
 
-了解分布式XGBoost，需要从计算任务的调度管理和核心算法分布式实现这两个角度展开。
+&emsp;&emsp;了解分布式XGBoost，需要从计算任务的调度管理和核心算法分布式实现这两个角度展开。
 
-计算任务的调度管理，在RABIT里提供了native MPI/Sun Grid Engine/YARN这三种方式。XGboost on YARN这种模式涉及到的细节则最多，包括YARN ApplicationMaster/Client的开发、Tracker脚本的开发、RABIT容错通信原语的开发以及基于RABIT原语的XGBoost算法分布式实现。如下图：
+&emsp;&emsp;计算任务的调度管理，在RABIT里提供了native MPI/Sun Grid Engine/YARN这三种方式。XGboost on YARN这种模式涉及到的细节则最多，包括YARN ApplicationMaster/Client的开发、Tracker脚本的开发、RABIT容错通信原语的开发以及基于RABIT原语的XGBoost算法分布式实现。如下图：
 
 ![xgboost-on-yarn](../images/xgboost-on-yarn.png)
 
-在这个图中，有几个需要介绍的角色：
+&emsp;&emsp;在这个图中，有几个需要介绍的角色：
 
 - Tracker：这其实是一个Python写的脚本程序，主要完成的工作有：
 
