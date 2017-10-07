@@ -1,6 +1,6 @@
-# updater
+# Updater
 
-在XGBoost里为了性能优化，既提供了单机多线程并行加速，也支持多机分布式加速。也就提供了若干种不同的并行建树的updater实现，按并行策略的不同，包括：
+在XGBoost里为了性能优化，既提供了单机多线程并行加速，也支持多机分布式加速。也就提供了若干种不同的并行建树的updater实现(均在tree目录下)，按并行策略的不同，包括：
 
 (1). inter-feature exact parallelism （特征级精确并行）
 
@@ -10,13 +10,13 @@
 
 (4). inter-node parallelism  （多机并行）
 
-此外，为了避免overfit，还提供了一个用于对树进行剪枝的updater(TreePruner)，以及一个用于在分布式场景下完成结点模型参数信息通信的updater(TreeSyncher)，这样设计，关于建树的主要操作都可以通过Updater链的方式串接起来，是Decorator设计模式的一种应用。
+此外，为了避免过拟合，还提供了一个用于对树进行剪枝的updater(TreePruner)，以及一个用于在分布式场景下完成结点模型参数信息通信的updater(TreeSyncher)，这样设计，关于建树的主要操作都可以通过Updater链的方式串接起来，是Decorator设计模式的一种应用。
 
 XGBoost的实现中，最重要的就是建树环节，而建树对应的代码中，最主要的也是Updater的实现。
 
-## ColMaker
+## ColMaker（单机版的inter-feature exact parallelism）
 
-ColMaker（单机版的inter-feature parallelism，实现了精确建树的策略）建树操作大致如下：
+ColMaker建树操作大致如下：
 
 ```
 updater_colmaker.cc:
@@ -30,35 +30,27 @@ ColMaker::Update()
                     -> for (each feature) // 通过OpenMP获取inter-feature parallelism
                          -> UpdateSolution()      
                               -> EnumerateSplit()  // 每个执行线程处理一个特征，选出每个特征的最优split point
+                              // 多个执行线程同时处理一个特征，选出该特征的最优split point; 
+                              // 在每个线程里汇总各个线程内分配到的数据样本的统计量(grad/hess);
+                              // aggregate所有线程的样本统计(grad/hess)， 计算出每个线程分配到的样本集合的边界特征值作为split point的最优分割点;
+                              // 在每个线程分配到的样本集合对应的特征值集合进行枚举作为split point，选出最优分割点
                               -> ParallelFindSplit()   
-                              // 多个执行线程同时处理一个特征，选出该特征
-                              //的最优split point; 
-                              // 在每个线程里汇总各个线程内分配到的数据样
-                              //本的统计量(grad/hess);
-                              // aggregate所有线程的样本统计(grad/hess)，       
-                              //计算出每个线程分配到的样本集合的边界特征值作为
-                              //split point的最优分割点;
-                              // 在每个线程分配到的样本集合对应的特征值集合进
-                              //行枚举作为split point，选出最优分割点
+                         // 上面的UpdateSolution()/ParallelFindSplit()会为所有待扩展分割的叶结点找到特征维度的最优split point，
+                         // 比如对于叶结点A，OpenMP线程1会找到特征F1的最优split point，OpenMP线程2会找到特征F2的最优split point，
+                         // 所以需要进行全局sync，找到叶结点A的最优split point。
                          -> SyncBestSolution()  
-                               // 上面的UpdateSolution()/ParallelFindSplit()
-                               //会为所有待扩展分割的叶结点找到特征维度的最优split 
-                               //point，比如对于叶结点A，OpenMP线程1会找到特征F1 
-                               //的最优split point，OpenMP线程2会找到特征F2的最
-                               //优split point，所以需要进行全局sync，找到叶结点A
-                               //的最优split point。
                          -> 为需要进行分割的叶结点创建孩子结点     
                -> ResetPosition() 
-                      //根据上一步的分割动作，更新样本到树结点的映射关系
-                      // Missing Value(i.e. default)和非Missing Value(i.e.non-default)分别处理
+                // 根据上一步的分割动作，更新样本到树结点的映射关系
+                // Missing Value(i.e. default)和非Missing Value(i.e.non-default)分别处理
                -> UpdateQueueExpand() 
-                      // 将待扩展分割的叶子结点用于替换qexpand_，作为下一轮split的起始基础
+                // 将待扩展分割的叶子结点用于替换qexpand_，作为下一轮split的起始基础
                -> InitNewNode()  // 为可用于split的树结点计算统计量
 ```
 
-ColMaker的整个建树操作中，最tricky的地方应该是用于支持intra-feature parallelism的ParallelFindSplit()
+ColMaker的整个建树操作中，最关键的地方是用于支持intra-feature parallelism的ParallelFindSplit()的实现。
 
-以上是我对XGBoost单机多线程的精确建树算法的整理，在官方论文里，对于这个算法有一个更为好的表达:    
+以上是对XGBoost单机多线程的精确建树算法的介绍，在官方论文里，对于这个算法有一个更好的描述:    
 
 ![exact-greedy-algorithm](../images/exact-greedy-algorithm.png)
 
